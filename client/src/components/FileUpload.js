@@ -1,6 +1,9 @@
 import { useState } from "react";
 import axios from "axios";
 import "./FileUpload.css";
+
+const contractAddress = '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
+
 const FileUpload = ({ contract, account, provider }) => {
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState("No image selected");
@@ -8,9 +11,9 @@ const FileUpload = ({ contract, account, provider }) => {
     e.preventDefault();
     if (file) {
       try {
+        console.log(file)
         const formData = new FormData();
         formData.append("file", file);
-
         const resFile = await axios({
           method: "post",
           url: "https://api.pinata.cloud/pinning/pinFileToIPFS",
@@ -21,9 +24,12 @@ const FileUpload = ({ contract, account, provider }) => {
             "Content-Type": "multipart/form-data",
           },
         });
+        console.log(formData);
+        // console.log(resFile)
         const ImgHash = `https://gateway.pinata.cloud/ipfs/${resFile.data.IpfsHash}`;
+        console.log(account);
         contract.add(account,ImgHash);
-        alert("Successfully Image Uploaded");
+        // alert("Successfully Image Uploaded");
         setFileName("No image selected");
         setFile(null);
       } catch (e) {
@@ -35,7 +41,7 @@ const FileUpload = ({ contract, account, provider }) => {
     setFile(null);
   };
   const retrieveFile = (e) => {
-    const data = e.target.files[0]; //files array of files object
+    const data = e.target.files[0]; 
     // console.log(data);
     const reader = new window.FileReader();
     reader.readAsArrayBuffer(data);

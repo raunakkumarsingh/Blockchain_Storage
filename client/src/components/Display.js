@@ -23,11 +23,12 @@ const Display = ({ contract, account }) => {
       console.log(str);
       console.log(str_array);
       const images = str_array.map((item, i) => {
+        console.log(item.substring(7));
         return (
           <a href={item} key={i} target="_blank">
             <img
               key={i}
-              src={`${item.substring(7)}`}
+              src="https://ipfs.io/ipfs/QmWnXi5Ftga48izovzUHkYJ1VkNpEDPkyHMmfaQg1RPgra"
               alt="new"
               className="image-list"
               
