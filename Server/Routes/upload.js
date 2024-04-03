@@ -8,9 +8,13 @@ const { ethers } = require("ethers");
 const blobUtil = require('blob-util');
 const fs = require('fs');
 const FormData = require('form-data');
+const pinataSDK = require('@pinata/sdk');
 
 require('dotenv').config();
+const pinata = new pinataSDK(process.env.PINATA_API_KEY, process.env.PINATA_SECRET_API_KEY);
 
+
+// console.log()
 const storage = multer.diskStorage({
 	destination: function (req, file, cb) {
 		cb(null, 'photos/');
@@ -22,7 +26,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-const contractAddress = '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
+const contractAddress = process.env.CONTRACTADDRESS;
 const abi = [
 	{
 		"inputs": [
@@ -113,9 +117,8 @@ const abi = [
 		"type": "function"
 	}
 ]
-const mnemonic = "little river train visual actress rigid sadness safe crumble review steak ethics";
 const provider = new ethers.providers.JsonRpcProvider('http://127.0.0.1:8545/');
-const privateKey = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
+const privateKey = process.env.PRIVATEKEY;
 const wallet = new ethers.Wallet(privateKey, provider);
 const contract = new ethers.Contract(contractAddress, abi, wallet);
 async function addData(ImgHash) {
@@ -124,16 +127,23 @@ async function addData(ImgHash) {
 		const account = wallet.address;
 		const tx = await contract.add(account, ImgHash);
 		await tx.wait();
-
 		console.log('Transaction hash:', tx.hash);
 		console.log('Data added successfully.');
 	} catch (error) {
 		console.error('Error adding data:', error);
 	}
 }
+async function shareAccess(address) {
+	try {
+		contract.allow(address);
+		console.log('Data shared successfully.');
+	} catch (error) {
+		console.error('Error adding data:', error);
+	}
+}
 
 router.post('/upload', upload.single('image'), [
-	body("type", "Enter Valid Type").isLength({ min: 1 }),
+	body("title", "Title is required").notEmpty(),
 ], async (req, res) => {
 	try {
 		const errors = validationResult(req);
@@ -141,48 +151,154 @@ router.post('/upload', upload.single('image'), [
 			return res.status(422).json({ errors: errors.array() });
 		}
 
-		const { type } = req.body;
+		const { title } = req.body;
 		const imageUrl = req.file.path;
 		console.log(imageUrl);
-		const fileBlob = blobUtil.arrayBufferToBlob(req.file.buffer, req.file.mimetype);
-
-		// Create FormData object
 		const formData = new FormData();
-
-		// Append file buffer to FormData
 		formData.append('file', fs.createReadStream(req.file.path), {
 			filename: req.file.originalname,
 			contentType: req.file.mimetype
 		});
-
-		formData.append('filePath', req.file.path);
-		console.log(formData);
-		console.log(req.file)
-		console.log(req.file.buffer)
-		console.log(req.file.path)
-
-		// Call Pinata API
 		const resFile = await axios({
 			method: "post",
 			url: "https://api.pinata.cloud/pinning/pinFileToIPFS",
 			data: formData,
 			headers: {
-				pinata_api_key: '75d6fd059e9c8f2c28a7',
-				pinata_secret_api_key: '91d314c3d866ed45780ede74c707ee72b0d8878f3db4132c23ab657c4796a560',
-				"Content-Type": "multipart/form-data",
+				...formData.getHeaders(),
+				pinata_api_key: process.env.PINATA_API_KEY,
+				pinata_secret_api_key: process.env.PINATA_SECRET_API_KEY,
 			},
 		});
 
-		// Response from Pinata API
 		const ImgHash = `https://gateway.pinata.cloud/ipfs/${resFile.data.IpfsHash}`;
-		console.log("IPFS Hash:", resFile.data.IpfsHash);
+		console.log("IPFS Hash:", resFile);
 		await addData(ImgHash);
-
-		res.status(200).json({ type, imageUrl, ipfsHash: resFile.data.IpfsHash });
+		res.status(200).json({ title, imageUrl, ipfsHash: resFile.data.IpfsHash });
 	} catch (err) {
 		console.error(err);
 		res.status(500).json({ error: "Internal Server Error" });
 	}
 });
+
+
+
+router.post('/shareaccess', async (req, res) => {
+	try {
+		const errors = validationResult(req);
+		if (!errors.isEmpty()) {
+			return res.status(422).json({ errors: errors.array() });
+		}
+
+
+		const addressList = await contract.shareAccess();
+
+
+
+		return res.status(200).json({ success: "allow successfully", addressList });
+	} catch (err) {
+		console.error(err);
+		return res.status(500).json({ error: "Internal Server Error" });
+	}
+});
+
+router.post('/allow', [
+	body("address", "Please provide a valid address").notEmpty().isString(),
+], async (req, res) => {
+	try {
+		const errors = validationResult(req);
+		if (!errors.isEmpty()) {
+			return res.status(422).json({ errors: errors.array() });
+		}
+
+
+		await contract.allow(req.body.address);
+
+		console.log("Share access completed");
+
+		return res.status(200).json({ success: "allow success" });
+	} catch (err) {
+		console.error(err);
+		return res.status(500).json({ error: "Internal Server Error" });
+	}
+});
+
+router.post('/disallow', [
+	body("address", "Please provide a valid address").notEmpty().isString(),
+], async (req, res) => {
+	try {
+		const errors = validationResult(req);
+		if (!errors.isEmpty()) {
+			return res.status(422).json({ errors: errors.array() });
+		}
+
+
+		await contract.disallow(req.body.address);
+
+		console.log("Share access completed");
+
+		return res.status(200).json({ success: "disallow successfully" });
+	} catch (err) {
+		console.error(err);
+		return res.status(500).json({ error: "Internal Server Error" });
+	}
+});
+
+
+router.post('/upload1', upload.single('image'), [
+	body("title", "Title is required").notEmpty(),
+	body("time", "Time should be a valid date").optional({ checkFalsy: true }).isISO8601(),
+	body("probability", "Probability should be a number").notEmpty().isNumeric(),
+	body("location", "Location is required").notEmpty()
+], async (req, res) => {
+	try {
+		const errors = validationResult(req);
+		if (!errors.isEmpty()) {
+			return res.status(422).json({ errors: errors.array() });
+		}
+
+		const time = req.body.time;
+		const probability = req.body.Probability;
+		const location = req.body.location;
+		const title = req.body.title;
+		const imageUrl = req.file.path;
+
+		console.log(imageUrl);
+		const formData = new FormData();
+		formData.append('file', fs.createReadStream(req.file.path), {
+			filename: req.file.originalname,
+			contentType: req.file.mimetype
+		});
+		const resFile = await axios({
+			method: "post",
+			url: "https://api.pinata.cloud/pinning/pinFileToIPFS",
+			data: formData,
+			headers: {
+				...formData.getHeaders(),
+				pinata_api_key: '75d6fd059e9c8f2c28a7',
+				pinata_secret_api_key: '91d314c3d866ed45780ede74c707ee72b0d8878f3db4132c23ab657c4796a560',
+			},
+		});
+
+		const ImgHash = `https://gateway.pinata.cloud/ipfs/${resFile.data.IpfsHash}`;
+		const json = {
+			ImgHash: ImgHash,
+			time: time,
+			location: location,
+			probability: probability
+		}
+		console.log(1111)
+		const result = await pinata.pinJSONToIPFS(json)
+		const resultHash = `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`;
+        await addData(resultHash);
+
+		res.status(200).json({ title,result, imageUrl, ipfsHash: resFile.data.IpfsHash });
+	} catch (err) {
+		console.error(err);
+		res.status(500).json({ error: "Internal Server Error" });
+	}
+});
+
+
+
 
 module.exports = router;

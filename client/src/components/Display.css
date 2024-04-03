@@ -8,8 +8,11 @@
 }
 
 .image-list img {
-  width: 250px;
-  height: 350px;
+  width: 200px;
+  height: 200px;
+
+  border-radius: 24px;
+ 
 }
 .center {
   margin: 40px;

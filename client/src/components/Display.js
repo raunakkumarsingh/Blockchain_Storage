@@ -1,46 +1,61 @@
 import { useState } from "react";
 import "./Display.css";
+
 const Display = ({ contract, account }) => {
   const [data, setData] = useState("");
+
+  async function fetchData(item) {
+    try {
+      const response = await fetch(`https://ipfs.io/${item.substring(29)}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+      const data = await response.json();
+      return data.ImgHash;
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      return null;
+    }
+  }
+  
   const getdata = async () => {
-    let dataArray;
     const Otheraddress = document.querySelector(".address").value;
+    let dataArray;
     try {
       if (Otheraddress) {
         dataArray = await contract.display(Otheraddress);
-        console.log(dataArray);
       } else {
         dataArray = await contract.display(account);
       }
     } catch (e) {
       alert("You don't have access");
+      return;
     }
-    const isEmpty = Object.keys(dataArray).length === 0;
-
-    if (!isEmpty) {
-      const str = dataArray.toString();
-      const str_array = str.split(",");
-      console.log(str);
-      console.log(str_array);
-      const images = str_array.map((item, i) => {
-        console.log(item.substring(7));
-        return (
-          <a href={item} key={i} target="_blank">
+    
+    if (dataArray && dataArray.length > 0) {
+      const str_array = dataArray.map(item => item.toString());
+      const images = await Promise.all(str_array.map(fetchData));
+      const filteredImages = images.filter(img => img); // Remove null values
+      if (filteredImages.length > 0) {
+        const imageElements = filteredImages.map((img, i) => (
+          <a href={dataArray[i]} key={i} target="_blank">
             <img
               key={i}
-              src="https://ipfs.io/ipfs/QmWnXi5Ftga48izovzUHkYJ1VkNpEDPkyHMmfaQg1RPgra"
+              src={`https://ipfs.io/${img.substring(29)}`}
               alt="new"
               className="image-list"
-              
-            ></img>
-           </a>
-        );
-      });
-      setData(images);
+            />
+          </a>
+        ));
+        setData(imageElements);
+      } else {
+        alert("No image to display");
+      }
     } else {
       alert("No image to display");
     }
   };
+
   return (
     <>
       <div className="image-list">{data}</div>
@@ -48,11 +63,12 @@ const Display = ({ contract, account }) => {
         type="text"
         placeholder="Enter Address"
         className="address"
-      ></input>
+      />
       <button className="center button" onClick={getdata}>
         Get Data
       </button>
     </>
   );
 };
+
 export default Display;
